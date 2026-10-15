@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24515E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Memory Duel">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<title>Memory Duel</title>
+<style>
+  :root {
+    --page: #E6EBEE;
+    --ink: #18202C;
+    --muted: #5B6776;
+    --felt: #24515E;
+    --felt-deep: #1A3E49;
+    --slot: rgba(255, 255, 255, 0.16);
+    --back: #2C47C9;
+    --back-line: #4762E0;
+    --face: #FBFAF6;
+    --you: #E29A12;
+    --ai: #7F6EEA;
+    --sheet: #FFFFFF;
+    --line: #CDD5DC;
+    --tip: #FFF4DC;
+    --tip-ink: #4A3608;
+    --font: ui-rounded, "SF Pro Rounded", "Nunito", "Segoe UI", system-ui, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #121925;
+      --ink: #E8EDF3;
+      --muted: #9AA6B5;
+      --felt: #1E4652;
+      --felt-deep: #153540;
+      --slot: rgba(255, 255, 255, 0.10);
+      --back: #2A43BA;
+      --back-line: #3D58D0;
+      --face: #EDEBE4;
+      --you: #F0AE33;
+      --ai: #9F92FF;
+      --sheet: #1B2433;
+      --line: #2E3A4C;
+      --tip: #2F2814;
+      --tip-ink: #F6E2B0;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--font);
+    font-size: 16px;
+    line-height: 1.4;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--you); outline-offset: 2px; }
+
+  .app {
+    max-width: 640px;
+    min-height: 100%;
+    margin: 0 auto;
+    padding: 12px 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Scoreboard */
+  .scoreboard {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: end;
+    gap: 8px;
+  }
+  .player {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 12px 8px;
+    border-radius: 12px;
+    border-bottom: 4px solid transparent;
+    transition: background-color .2s, border-color .2s;
+  }
+  .player.ai { align-items: flex-end; text-align: right; }
+  .player .name { font-size: 15px; font-weight: 600; color: var(--muted); }
+  .player .score {
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .player.ai .score { flex-direction: row-reverse; }
+  .player .star { font-size: 18px; visibility: hidden; }
+  .player.last .star { visibility: visible; }
+  .player.you .star { color: var(--you); }
+  .player.ai .star { color: var(--ai); }
+  .player.you.active { border-color: var(--you); background: color-mix(in srgb, var(--you) 14%, transparent); }
+  .player.ai.active { border-color: var(--ai); background: color-mix(in srgb, var(--ai) 16%, transparent); }
+  .player.active .name { color: var(--ink); }
+  .match { text-align: center; font-size: 13px; color: var(--muted); padding-bottom: 10px; }
+  .match span { display: block; }
+
+  /* Board */
+  .table { display: flex; justify-content: center; }
+  .board-wrap {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: 1fr auto;
+    gap: 4px 6px;
+    width: min(100%, calc(100svh - 310px));
+  }
+  .ranks, .files {
+    display: grid;
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .ranks { grid-template-rows: repeat(8, 1fr); align-items: center; padding: 10px 0; }
+  .files { grid-column: 2; grid-template-columns: repeat(8, 1fr); text-align: center; padding: 0 10px; }
+  .board-wrap:not(.coords) { grid-template-columns: 1fr; }
+  .board-wrap:not(.coords) .ranks, .board-wrap:not(.coords) .files { display: none; }
+
+  .felt {
+    background: var(--felt);
+    border-radius: 16px;
+    padding: 10px;
+    box-shadow: inset 0 0 0 2px var(--felt-deep), inset 0 6px 18px rgba(0, 0, 0, .18);
+    transition: box-shadow .25s;
+  }
+  body[data-turn="you"] .felt { box-shadow: inset 0 0 0 2px var(--felt-deep), inset 0 6px 18px rgba(0, 0, 0, .18), 0 0 0 3px color-mix(in srgb, var(--you) 55%, transparent); }
+  body[data-turn="ai"] .felt { box-shadow: inset 0 0 0 2px var(--felt-deep), inset 0 6px 18px rgba(0, 0, 0, .18), 0 0 0 3px color-mix(in srgb, var(--ai) 55%, transparent); }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: clamp(3px, 1vw, 6px);
+    container-type: inline-size;
+    aspect-ratio: 1;
+  }
+  .card {
+    position: relative;
+    aspect-ratio: 1;
+    border: 0;
+    padding: 0;
+    background: none;
+    border-radius: 6px;
+    cursor: pointer;
+    perspective: 500px;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .card .inner {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+    transition: transform .26s ease-out;
+  }
+  .card.up .inner { transform: rotateY(180deg); }
+  .card .back, .card .face {
+    position: absolute;
+    inset: 0;
+    border-radius: 6px;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+  .card .back {
+    background-color: var(--back);
+    background-image:
+      repeating-linear-gradient(45deg, transparent 0 4px, var(--back-line) 4px 5px),
+      repeating-linear-gradient(-45deg, transparent 0 4px, var(--back-line) 4px 5px);
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .22), 0 1px 0 rgba(0, 0, 0, .25);
+  }
+  .card .face {
+    transform: rotateY(180deg);
+    background: var(--face);
+    display: grid;
+    place-items: center;
+    font-size: 4.6vw;
+    font-size: 7.4cqw;
+    line-height: 1;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, .25);
+  }
+  .card.by-you .face { box-shadow: inset 0 0 0 3px var(--you); }
+  .card.by-ai .face { box-shadow: inset 0 0 0 3px var(--ai); }
+  .card.flash .face { animation: paired .45s ease-out; }
+  @keyframes paired { 0% { transform: rotateY(180deg) scale(1); } 45% { transform: rotateY(180deg) scale(1.12); } 100% { transform: rotateY(180deg) scale(1); } }
+  .card.taken { cursor: default; }
+  .card.taken .inner { visibility: hidden; }
+  .card.taken::after {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    border-radius: 5px;
+    border: 1.5px dashed var(--slot);
+  }
+  .card.reveal .face { opacity: .55; }
+
+  /* Status and coach */
+  .status { min-height: 76px; display: flex; flex-direction: column; gap: 8px; }
+  #status { margin: 0; font-size: 17px; font-weight: 600; text-align: center; }
+  .situation {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .situation b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .situation .trap { flex-basis: 100%; text-align: center; color: var(--ink); font-weight: 600; }
+  .coach:empty { display: none; }
+  .coach {
+    background: var(--tip);
+    color: var(--tip-ink);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14.5px;
+  }
+  .coach p { margin: 0; }
+  .coach p + p { margin-top: 6px; }
+
+  /* Actions */
+  .actions { display: flex; gap: 10px; align-items: center; margin-top: auto; }
+  .actions .btn.primary { flex: 1 1 auto; max-width: 360px; margin: 0 auto 0 0; }
+  .btn.icon { width: 46px; height: 46px; min-height: 46px; padding: 0; display: grid; place-items: center; flex: none; }
+  .btn.icon svg { width: 22px; height: 22px; }
+  .btn {
+    border: 0;
+    border-radius: 999px;
+    padding: 11px 16px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    background: transparent;
+    min-height: 44px;
+  }
+  .btn.primary { background: var(--ink); color: var(--page); }
+  .btn.quiet { color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line); }
+
+  /* Sheets */
+  dialog {
+    border: 0;
+    padding: 0;
+    border-radius: 18px;
+    width: min(540px, calc(100vw - 20px));
+    max-height: calc(100svh - 40px);
+    background: var(--sheet);
+    color: var(--ink);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
+  }
+  dialog::backdrop { background: rgba(8, 14, 24, .55); }
+  .sheet { display: flex; flex-direction: column; max-height: calc(100svh - 40px); }
+  .sheet-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px 12px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .sheet-head h2 { margin: 0; font-size: 20px; }
+  .sheet-body { padding: 16px 20px 24px; overflow-y: auto; }
+  .sheet-body h3 { font-size: 16px; margin: 18px 0 6px; }
+  .sheet-body h3:first-child { margin-top: 0; }
+  .sheet-body p, .sheet-body li { max-width: 62ch; }
+  .sheet-body ol { padding-left: 1.3em; }
+  .sheet-body li + li { margin-top: 6px; }
+  .fine { font-size: 13.5px; color: var(--muted); }
+
+  .field { padding: 12px 0; border-top: 1px solid var(--line); }
+  .field:first-child { border-top: 0; padding-top: 0; }
+  .field > .label { display: block; font-weight: 600; margin-bottom: 6px; }
+  .note { font-size: 13.5px; color: var(--muted); margin: 4px 0 0; }
+  .levels { display: grid; gap: 6px; }
+  .level {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1.5px var(--line);
+    cursor: pointer;
+  }
+  .level:has(input:checked) { box-shadow: inset 0 0 0 2px var(--ai); background: color-mix(in srgb, var(--ai) 10%, transparent); }
+  .level input { grid-row: span 2; margin: 3px 0 0; accent-color: var(--ai); }
+  .level .lname { font-weight: 600; }
+  .level .ldesc { font-size: 13.5px; color: var(--muted); }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .row + .row, .note + .row { margin-top: 12px; }
+  .switch { width: 22px; height: 22px; accent-color: var(--you); }
+  select {
+    font: inherit;
+    color: var(--ink);
+    background: var(--page);
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    padding: 6px 10px;
+    min-height: 40px;
+  }
+  .record { margin: 0; padding: 0; list-style: none; }
+  .record li { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-variant-numeric: tabular-nums; }
+  .record li span:last-child { color: var(--muted); }
+
+  .result .sheet-body { text-align: center; }
+  .result h2 { font-size: 28px; margin: 4px 0 6px; }
+  .result p { margin: 4px auto; }
+  .result .buttons { display: flex; gap: 10px; justify-content: center; margin-top: 18px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card .inner, .player, .felt { transition: none; }
+    .card.flash .face { animation: none; }
+  }
+</style>
+</head>
+<body data-turn="you">
+<main class="app">
+  <header class="scoreboard">
+    <div class="player you" id="p0">
+      <span class="name" data-t="you">You</span>
+      <span class="score"><span id="score0">0</span><span class="star" aria-hidden="true">★</span></span>
+    </div>
+    <div class="match"><span id="gameNo"></span><span id="seriesScore"></span></div>
+    <div class="player ai" id="p1">
+      <span class="name" id="name1"></span>
+      <span class="score"><span id="score1">0</span><span class="star" aria-hidden="true">★</span></span>
+    </div>
+  </header>
+
+  <section class="table">
+    <div class="board-wrap coords">
+      <div class="ranks" aria-hidden="true"><span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span></div>
+      <div class="felt"><div class="board" id="board" role="group" aria-label="Board"></div></div>
+      <div class="files" aria-hidden="true"><span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span></div>
+    </div>
+  </section>
+
+  <section class="status">
+    <p id="status" aria-live="polite"></p>
+    <div class="situation" id="situation"></div>
+    <div class="coach" id="coach" aria-live="polite"></div>
+  </section>
+
+  <nav class="actions">
+    <button class="btn primary" id="btnMain" type="button"></button>
+    <button class="btn quiet icon" id="btnSettings" type="button" data-t-label="settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h9M19 6h1M4 12h3M13 12h7M4 18h11M21 18h-1"/><circle cx="16" cy="6" r="2.4"/><circle cx="10" cy="12" r="2.4"/><circle cx="18" cy="18" r="2.4"/></svg>
+    </button>
+    <button class="btn quiet icon" id="btnRules" type="button" data-t-label="rules" aria-label="Rules">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.5"/><path d="M12 17.2h.01"/></svg>
+    </button>
+  </nav>
+</main>
+
+<dialog id="dlgSettings">
+  <div class="sheet">
+    <div class="sheet-head"><h2 data-t="settings">Settings</h2><button class="btn quiet" type="button" data-close data-t="close">Close</button></div>
+    <div class="sheet-body">
+      <div class="field">
+        <span class="label" data-t="setOpponent">Opponent</span>
+        <div class="levels" id="levels"></div>
+        <p class="note" data-t="setRestartNote"></p>
+      </div>
+      <div class="field">
+        <div class="row"><label for="optCoach" data-t="setCoach">Coach tips</label><input class="switch" type="checkbox" id="optCoach"></div>
+        <p class="note" data-t="setCoachNote" style="margin-top:2px"></p>
+        <div class="row"><label for="optCoords" data-t="setCoords">Show coordinates</label><input class="switch" type="checkbox" id="optCoords"></div>
+      </div>
+      <div class="field">
+        <div class="row"><label for="optPace" data-t="setPace">Opponent speed</label>
+          <select id="optPace"><option value="slow" data-t="paceSlow"></option><option value="normal" data-t="paceNormal"></option><option value="fast" data-t="paceFast"></option></select></div>
+        <div class="row"><label for="optAiShow" data-t="setAiShow">Opponent's missed cards stay up</label>
+          <select id="optAiShow"><option value="1">1 s</option><option value="1.5">1.5 s</option><option value="2">2 s</option><option value="3">3 s</option></select></div>
+        <div class="row"><label for="optMyMiss" data-t="setMyMiss">Your missed cards stay up</label>
+          <select id="optMyMiss"><option value="1">1 s</option><option value="1.5">1.5 s</option><option value="2">2 s</option><option value="tap" data-t="untilTap"></option></select></div>
+      </div>
+      <div class="field">
+        <div class="row"><label for="optSeries" data-t="setSeries">Games per series</label>
+          <select id="optSeries"><option value="1">1</option><option value="6">6</option><option value="8">8</option><option value="10">10</option></select></div>
+        <div class="row"><label for="optLang" data-t="setLang">Language</label>
+          <select id="optLang"><option value="auto" data-t="langAuto"></option><option value="en">English</option><option value="es">Español</option></select></div>
+      </div>
+      <div class="field">
+        <span class="label" data-t="record">Record</span>
+        <ul class="record" id="record"></ul>
+        <div class="row"><span></span><button class="btn quiet" type="button" id="btnResetRecord" data-t="resetRecord">Reset record</button></div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlgRules">
+  <div class="sheet">
+    <div class="sheet-head"><h2 data-t="rulesTitle">Rules</h2><button class="btn quiet" type="button" data-close data-t="close">Close</button></div>
+    <div class="sheet-body" id="rulesBody"></div>
+  </div>
+</dialog>
+
+<dialog id="dlgResult" class="result">
+  <div class="sheet">
+    <div class="sheet-body">
+      <h2 id="resTitle"></h2>
+      <p id="resDetail"></p>
+      <p class="fine" id="resSeries"></p>
+      <div class="buttons">
+        <button class="btn primary" type="button" id="resNext"></button>
+        <button class="btn quiet" type="button" data-close data-t="viewBoard">View board</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<script src="game.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
