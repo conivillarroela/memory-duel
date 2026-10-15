@@ -7,7 +7,8 @@
  * 1. Rules: pairs, misses, the pass/stop rule and tiebreaks on fixed boards.
  * 2. Best-play tables: sanity checks and where passing starts to pay off.
  * 3. Thousands of computer-vs-computer games, checking invariants on every move
- *    and printing how often each level beats the others.
+ *    and printing how often each level beats the others, then the same ladder
+ *    with both computers exploring in 2x2 blocks.
  */
 'use strict';
 
@@ -139,6 +140,31 @@ function fixedGame(first) {
   check(tips.some((t) => t.code === 'leftPairs' && t.n === 1), 'coach flags a known pair left on the table');
 })();
 
+/* ---------- 2c. Exploring in blocks ---------- */
+(function blocks() {
+  // Flips a card, lets the computer see it, and resolves a miss.
+  const play = (g, ai, i) => {
+    const ev = Core.flip(g, i);
+    ai.observe(i, g.cards[i].pair);
+    if (ev.kind === 'miss') Core.endTurn(g);
+  };
+  let g = fixedGame(1);
+  let ai = Core.createAI('casual', Core.mulberry32(2), { inOrder: true });
+  let i = ai.choose(g);
+  check(i === 56, 'block mode opens at a1');
+  play(g, ai, i);
+  i = ai.choose(g);
+  check(i === 48, 'then a2, next to it');
+  play(g, ai, i);
+  play(g, ai, 42); play(g, ai, 34); // the other player flips c3 and c4
+  check(ai.choose(g) === 43, 'then d3, to complete the square c3-d4');
+
+  g = fixedGame(0);
+  ai = Core.createAI('forget7', Core.mulberry32(3), { inOrder: true });
+  play(g, ai, 56); play(g, ai, 48); // the other player flips a1 and a2
+  check(ai.choose(g) === 57, 'with no memory it still completes the square: b1');
+})();
+
 /* ---------- 2. Best-play tables ---------- */
 const { V, NEW, ALT } = Core.tables;
 (function tables() {
@@ -170,9 +196,9 @@ for (let u = 1; u <= 6; u++) {
 console.log('');
 
 /* ---------- 3. Computer vs computer ---------- */
-function playGame(levels, rng, first) {
+function playGame(levels, rng, first, inOrder) {
   const g = Core.createGame({ rng, first });
-  const ais = levels.map((l) => Core.createAI(l, rng));
+  const ais = levels.map((l) => Core.createAI(l, rng, { inOrder }));
   let guard = 0;
   while (!g.over) {
     if (++guard > 5000) throw new Error('game did not finish');
@@ -212,5 +238,16 @@ rows.forEach((row, r) => console.log(pad(L[r], 10) + row.map((x) => pad((100 * x
 // Stronger levels should beat weaker ones.
 for (let r = 1; r < L.length; r++) {
   check(rows[r][r - 1] > 0.5, `${L[r]} should beat ${L[r - 1]}`);
+}
+
+// Which unknown card gets flipped shouldn't change much, so this run only
+// checks invariants and prints the numbers.
+console.log(`\nBoth exploring in 2x2 blocks, win rate against the level below (${GAMES} games each):`);
+for (let r = 1; r < L.length; r++) {
+  let wins = 0;
+  for (let n = 0; n < GAMES; n++) {
+    if (playGame([L[r], L[r - 1]], rng, n % 2, true).result.winner === 0) wins++;
+  }
+  console.log(pad('', 2) + pad(L[r], 10) + pad('vs ' + L[r - 1], 14) + (100 * wins / GAMES).toFixed(1) + '%');
 }
 console.log(`\nAll ${checks.toLocaleString('en-US')} checks passed.`);

@@ -250,23 +250,74 @@
   }
 
   /* ------------------------------------------------------------------
-   * Computer opponents
+   * Computer opponents, weakest first
+   *   forget7…forget2: forget about n cards in 7 (forget7 remembers nothing,
+   *             so it plays at random); second card is a random unknown
    *   beginner: forgets about 1 card in 7; second card is a random unknown
    *   casual:   remembers everything; second card is a random unknown
    *   advanced: remembers everything; second card is a known card when possible
    *   expert:   remembers everything; follows the best-play tables, including passes
+   * Forgetting happens each time a card is seen, so a card seen again gets
+   * another chance to stick.
    * ------------------------------------------------------------------ */
-  const LEVELS = ['beginner', 'casual', 'advanced', 'expert'];
-  const RECALL = { beginner: 0.85, casual: 1, advanced: 1, expert: 1 };
+  const LEVELS = [
+    'forget7', 'forget6', 'forget5', 'forget4', 'forget3', 'forget2',
+    'beginner', 'casual', 'advanced', 'expert',
+  ];
+  const FORGET = { forget7: 7, forget6: 6, forget5: 5, forget4: 4, forget3: 3, forget2: 2, beginner: 1 }; // in sevenths
 
-  function createAI(level, rng) {
+  /*
+   * Exploring in blocks (opts.inOrder): the board splits into 16 blocks of
+   * 2x2, taken column by column from a1 (a1-b2, a3-b4, ..., then c1-d2, ...).
+   * Inside a block the order is a1, a2, b1, b2, so a fresh block starts with
+   * two adjacent cards and the other player can complete the square.
+   */
+  const BLOCKS = [];
+  const BLOCK_OF = new Array(CELLS);
+  for (let f = 0; f < SIZE; f += 2) {
+    for (let r = 1; r < SIZE; r += 2) {
+      const block = [[f, r], [f, r + 1], [f + 1, r], [f + 1, r + 1]].map(([x, y]) => (SIZE - y) * SIZE + x);
+      for (const i of block) BLOCK_OF[i] = BLOCKS.length;
+      BLOCKS.push(block);
+    }
+  }
+
+  function createAI(level, rng, opts) {
     if (!LEVELS.includes(level)) throw new Error('Unknown level ' + level);
     rng = rng || Math.random;
+    const recall = 1 - (FORGET[level] || 0) / 7;
     const mem = new Map(); // index -> pair id, for face-down cards it remembers
+    const explored = new Set(); // every card anyone has flipped, even ones it forgot
+    let lastBlock = -1; // block of the latest card flipped for the first time
     let plan = null; // second card decided together with the first one
+    const ai = { level, inOrder: !!(opts && opts.inOrder), observe, choose };
 
     function observe(i, pair) {
-      if (!mem.has(i) && rng() < RECALL[level]) mem.set(i, pair);
+      if (!explored.has(i)) {
+        explored.add(i);
+        lastBlock = BLOCK_OF[i];
+      }
+      if (!mem.has(i) && rng() < recall) mem.set(i, pair);
+    }
+
+    // A card it doesn't know. In block mode it takes a card nobody has flipped
+    // yet: first in the block of the latest new card, then in any started
+    // block, then in the next fresh block. Once every card has been flipped,
+    // only forgetful levels get here, and they guess among what they forgot.
+    function newCard(g, v) {
+      if (ai.inOrder) {
+        const next = (b) => BLOCKS[b].find((i) => g.cards[i].state === 'down' && !g.cards[i].seen);
+        if (lastBlock >= 0 && next(lastBlock) !== undefined) return next(lastBlock);
+        let fresh;
+        for (let b = 0; b < BLOCKS.length; b++) {
+          const i = next(b);
+          if (i === undefined) continue;
+          if (BLOCKS[b].some((j) => g.cards[j].seen)) return i;
+          if (fresh === undefined) fresh = i;
+        }
+        if (fresh !== undefined) return fresh;
+      }
+      return pick(v.unseen, rng);
     }
 
     function view(g) {
@@ -296,7 +347,7 @@
             return pick(v.singles, rng);
           }
         }
-        return pick(v.unseen, rng);
+        return newCard(g, v);
       }
 
       // Second card of the attempt.
@@ -308,18 +359,18 @@
         if (p === firstPair && i !== g.pending && g.cards[i].state === 'down') return i;
       }
       const v = view(g);
-      if (planned === 'unseen' || v.singles.length === 0) return pick(v.unseen, rng);
+      if (planned === 'unseen' || v.singles.length === 0) return newCard(g, v);
       if (level === 'advanced') return pick(v.singles, rng);
       if (level === 'expert') {
         const k = v.singles.length;
         const u = (v.unseen.length - k + 1) / 2; // +1: the first card's own pair
         const s = secondCard(k, u);
-        return s.known >= s.unknown ? pick(v.singles, rng) : pick(v.unseen, rng);
+        return s.known >= s.unknown ? pick(v.singles, rng) : newCard(g, v);
       }
-      return pick(v.unseen, rng);
+      return newCard(g, v);
     }
 
-    return { level, observe, choose };
+    return ai;
   }
 
   /* ------------------------------------------------------------------

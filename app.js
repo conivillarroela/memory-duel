@@ -11,10 +11,22 @@
   const STRINGS = {
     en: {
       you: 'You',
-      level_beginner: 'Beginner',
-      level_casual: 'Casual',
-      level_advanced: 'Advanced',
-      level_expert: 'Expert',
+      level_forget7: 'Amnesiac',
+      level_forget6: 'Scatterbrained',
+      level_forget5: 'Forgetful',
+      level_forget4: 'Distracted',
+      level_forget3: 'Inconsistent',
+      level_forget2: 'Fallible',
+      level_beginner: 'Mostly sharp',
+      level_casual: 'Reckless',
+      level_advanced: 'Careful',
+      level_expert: 'Optimal',
+      desc_forget7: 'Remembers nothing, so every card it flips is a guess.',
+      desc_forget6: 'Forgets about six cards in seven and risks a second unknown card when stuck.',
+      desc_forget5: 'Forgets about five cards in seven and risks a second unknown card when stuck.',
+      desc_forget4: 'Forgets about four cards in seven and risks a second unknown card when stuck.',
+      desc_forget3: 'Forgets about three cards in seven and risks a second unknown card when stuck.',
+      desc_forget2: 'Forgets about two cards in seven and risks a second unknown card when stuck.',
       desc_beginner: 'Forgets about one card in seven and risks a second unknown card when stuck.',
       desc_casual: 'Remembers every card but still risks a second unknown card when stuck.',
       desc_advanced: 'Remembers every card and never risks a second unknown card.',
@@ -61,6 +73,8 @@
       sitTrap: 'Trap: pass by flipping two cards you already know.',
       setOpponent: 'Opponent',
       setRestartNote: 'Opponent and series changes start a new series with your next game.',
+      setInOrder: 'Opponent explores in 2×2 blocks',
+      setInOrderNote: 'Instead of flipping new cards at random, it explores block by block from a1 and finishes any block you start, like two players sharing the work.',
       setCoach: 'Coach tips',
       setCoachNote: 'Reviews your moves after each turn and shows the position counts. Turn it off for realistic practice.',
       setCoords: 'Show coordinates (a1–h8)',
@@ -98,10 +112,22 @@
     },
     es: {
       you: 'Tú',
-      level_beginner: 'Principiante',
-      level_casual: 'Casual',
-      level_advanced: 'Avanzado',
-      level_expert: 'Experto',
+      level_forget7: 'Amnésico',
+      level_forget6: 'Despistado',
+      level_forget5: 'Olvidadizo',
+      level_forget4: 'Distraído',
+      level_forget3: 'Irregular',
+      level_forget2: 'Falible',
+      level_beginner: 'Casi infalible',
+      level_casual: 'Temerario',
+      level_advanced: 'Prudente',
+      level_expert: 'Óptimo',
+      desc_forget7: 'No recuerda nada, así que cada carta que da vuelta es al azar.',
+      desc_forget6: 'Olvida más o menos seis de cada siete cartas y, cuando no sabe qué hacer, arriesga una segunda carta desconocida.',
+      desc_forget5: 'Olvida más o menos cinco de cada siete cartas y, cuando no sabe qué hacer, arriesga una segunda carta desconocida.',
+      desc_forget4: 'Olvida más o menos cuatro de cada siete cartas y, cuando no sabe qué hacer, arriesga una segunda carta desconocida.',
+      desc_forget3: 'Olvida más o menos tres de cada siete cartas y, cuando no sabe qué hacer, arriesga una segunda carta desconocida.',
+      desc_forget2: 'Olvida más o menos dos de cada siete cartas y, cuando no sabe qué hacer, arriesga una segunda carta desconocida.',
       desc_beginner: 'Olvida más o menos una de cada siete cartas y, cuando no sabe qué hacer, arriesga una segunda carta desconocida.',
       desc_casual: 'Recuerda todas las cartas, pero igual arriesga una segunda carta desconocida cuando no sabe qué hacer.',
       desc_advanced: 'Recuerda todas las cartas y nunca arriesga una segunda carta desconocida.',
@@ -148,6 +174,8 @@
       sitTrap: 'Trampa: pasa dando vuelta dos cartas que ya conoces.',
       setOpponent: 'Rival',
       setRestartNote: 'Los cambios de rival o de serie empiezan una nueva serie en tu próxima partida.',
+      setInOrder: 'El rival explora en bloques de 2×2',
+      setInOrderNote: 'En vez de dar vuelta cartas nuevas al azar, explora bloque por bloque desde a1 y completa los bloques que empiezas, como dos jugadores que se reparten el trabajo.',
       setCoach: 'Consejos del entrenador',
       setCoachNote: 'Revisa tus jugadas después de cada turno y muestra los conteos de la posición. Desactívalo para practicar en condiciones reales.',
       setCoords: 'Mostrar coordenadas (a1–h8)',
@@ -197,6 +225,7 @@
   const STORE_KEY = 'memory-duel/v1';
   const DEFAULTS = {
     level: 'advanced',
+    inOrder: false,
     coach: true,
     coords: true,
     pace: 'normal',
@@ -271,6 +300,7 @@
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const aiName = () => t('level_' + aiLevel);
+  const levelLabel = (level) => Core.LEVELS.indexOf(level) + 1 + ' · ' + t('level_' + level);
 
   function setStatus(key, params) {
     status = { key, params: params || null };
@@ -428,7 +458,7 @@
     aiLevel = settings.level;
     const first = (series.n - 1) % 2 === 0 ? YOU : AI; // alternate who starts
     g = Core.createGame({ first });
-    ai = Core.createAI(aiLevel);
+    ai = Core.createAI(aiLevel, Math.random, { inOrder: !!settings.inOrder });
     flippedBy.clear();
     flash.clear();
     attempt = null;
@@ -605,7 +635,7 @@
       });
       const nameEl = document.createElement('span');
       nameEl.className = 'lname';
-      nameEl.textContent = t('level_' + level);
+      nameEl.textContent = levelLabel(level);
       const desc = document.createElement('span');
       desc.className = 'ldesc';
       desc.textContent = t('desc_' + level);
@@ -621,7 +651,7 @@
       const r = record[level] || { w: 0, l: 0, d: 0 };
       const li = document.createElement('li');
       const a = document.createElement('span');
-      a.textContent = t('level_' + level);
+      a.textContent = levelLabel(level);
       const b = document.createElement('span');
       b.textContent = t('recordLine', r);
       li.append(a, b);
@@ -630,6 +660,7 @@
   }
 
   function syncSettingsForm() {
+    $('#optInOrder').checked = !!settings.inOrder;
     $('#optCoach').checked = !!settings.coach;
     $('#optCoords').checked = !!settings.coords;
     $('#optPace').value = settings.pace;
@@ -645,6 +676,11 @@
     render();
   }
 
+  $('#optInOrder').addEventListener('change', (e) => {
+    settings.inOrder = e.target.checked;
+    if (ai) ai.inOrder = settings.inOrder; // takes effect right away
+    saveAndRefresh();
+  });
   $('#optCoach').addEventListener('change', (e) => {
     settings.coach = e.target.checked;
     if (!settings.coach) shownTips = [];

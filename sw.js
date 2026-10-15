@@ -1,7 +1,7 @@
 /* Offline support. Serves the cached app instantly and refreshes the cache in
    the background, so a new version shows up on the next launch.
    Bump CACHE whenever you deploy changes. */
-const CACHE = 'memory-duel-v1';
+const CACHE = 'memory-duel-v2';
 const ASSETS = [
   './',
   './index.html',
